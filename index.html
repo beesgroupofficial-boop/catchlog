@@ -272,34 +272,32 @@ function setSyncOnline(on) {
 // ── UTILS ──
 // 営業日: 20:00〜翌4:59 を「今日」とする
 // 現在時刻が0:00〜4:59なら「前日の営業日」扱い
-function getBusinessDayStart() {
+// 営業時間: 20:00〜翌4:59
+// 「今日の営業日」= 直近の20:00起点の24時間
+function getCurrentBusinessDayStart() {
   const now = new Date();
   const h = now.getHours();
   const base = new Date(now);
-  if (h < 5) base.setDate(base.getDate() - 1); // 深夜は前日扱い
+  // 0:00〜19:59 の場合は「前日の20:00」が営業日開始
+  if (h < 20) base.setDate(base.getDate() - 1);
   base.setHours(20, 0, 0, 0);
   return base;
 }
+function getBusinessDayStart() { return getCurrentBusinessDayStart(); }
 function getBusinessDayEnd() {
-  const start = getBusinessDayStart();
+  const start = getCurrentBusinessDayStart();
   const end = new Date(start);
   end.setDate(end.getDate() + 1);
-  end.setHours(5, 0, 0, 0);
+  end.setHours(20, 0, 0, 0); // 翌20:00まで（次の営業日開始まで）
   return end;
 }
-// 表示用「今日の営業日」ラベル (例: "4/25営業日")
-function getTodayLabel() {
-  const start = getBusinessDayStart();
-  return (start.getMonth()+1) + '/' + start.getDate() + ' 営業日';
-}
 const getToday = () => {
-  // 後方互換: 営業日開始日のYYYY-MM-DDを返す
-  const s = getBusinessDayStart();
+  const s = getCurrentBusinessDayStart();
   return s.toISOString().slice(0,10);
 };
 function isToday(datetime) {
   const t = new Date(datetime);
-  return t >= getBusinessDayStart() && t < getBusinessDayEnd();
+  return t >= getCurrentBusinessDayStart() && t < getBusinessDayEnd();
 }
 const getMonths = () => [...new Set(Object.values(state.logs).map(l=>l.datetime.slice(0,7)))].sort().reverse();
 const fmtTime = dt => new Date(dt).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
