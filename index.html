@@ -296,8 +296,16 @@ const getToday = () => {
   return s.toISOString().slice(0,10);
 };
 function isToday(datetime) {
+  // 「今日の営業日」= 今日の05:00 〜 翌日の04:59
   const t = new Date(datetime);
-  return t >= getCurrentBusinessDayStart() && t < getBusinessDayEnd();
+  const now = new Date();
+  const start = new Date(now);
+  // 現在が0:00〜4:59なら「前日の05:00」が起点
+  if (now.getHours() < 5) start.setDate(start.getDate() - 1);
+  start.setHours(5, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1); // 翌日05:00未満
+  return t >= start && t < end;
 }
 const getMonths = () => [...new Set(Object.values(state.logs).map(l=>l.datetime.slice(0,7)))].sort().reverse();
 const fmtTime = dt => new Date(dt).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
@@ -431,7 +439,6 @@ window.submitCatch = async () => {
 
 // ── TODAY ──
 function renderTodayTab() {
-  const today=getToday();
   const logs=Object.entries(state.logs).map(([id,l])=>({...l,_id:id}))
     .filter(l=>isToday(l.datetime) && l.staff===me)
     .sort((a,b)=>new Date(b.datetime)-new Date(a.datetime));
@@ -440,10 +447,19 @@ function renderTodayTab() {
   return logs.map(l=>`
     <div class="log-item">
       <div><div style="font-size:15px;font-weight:500;">${l.store}</div><div class="log-time">${fmtTime(l.datetime)}</div></div>
-      <div><span class="log-cnt">${l.count}</span><span class="log-unit">人</span></div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div><span class="log-cnt">${l.count}</span><span class="log-unit">人</span></div>
+        <button class="btn-del" onclick="delMyLog('${l._id}')">削除</button>
+      </div>
     </div>`).join('')+
     `<div class="total-bar"><span class="total-lbl">今日の合計</span><span class="total-val">${total}人</span></div>`;
 }
+window.delMyLog = id => openModal('この記録を削除しますか？', async()=>{
+  await remove(ref(db,'logs/'+id));
+  toast('削除しました');
+  const w=document.getElementById('u-body')?.firstChild;
+  if(w) w.innerHTML=renderTodayTab();
+});
 
 // ── RANKING ──
 let rankPeriod='today';
