@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>CATCH LOG</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#f5f5f0;--surface:#fff;--surface2:#f0efea;
+  --border:rgba(0,0,0,.10);--border2:rgba(0,0,0,.18);
+  --text:#1a1a18;--text2:#6b6b66;--text3:#9b9b96;
+  --green:#1D9E75;--green-light:#E1F5EE;--green-dark:#085041;--green-text:#0F6E56;
+  --red:#A32D2D;--red-light:#FCEBEB;--red-border:#F09595;
+  --gold:#FAC775;--silver:#D3D1C7;--bronze:#F5C4B3;
+  --r:10px;--rl:14px;--font:'Noto Sans JP',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;background:var(--bg);font-family:var(--font);color:var(--text);font-size:16px;}
+body{overscroll-behavior:none;}
+.screen{display:none;flex-direction:column;height:100vh;height:100dvh;}
+.screen.active{display:flex;}
+
+#loading-screen{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:16px;}
+#loading-screen.hidden{display:none;}
+.spinner{width:36px;height:36px;border:3px solid var(--border2);border-top-color:var(--green);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-txt{font-size:14px;color:var(--text2);}
+
+.sync-dot{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;margin-left:6px;animation:pulse 2s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.sync-dot.offline{background:#F09595;animation:none;}
+
+.topbar{background:var(--surface);border-bottom:0.5px solid var(--border);padding:14px 16px 12px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;padding-top:max(14px,env(safe-area-inset-top));}
+.topbar-title{font-size:17px;font-weight:700;letter-spacing:1px;display:flex;align-items:center;}
+.topbar-sub{font-size:12px;color:var(--text2);}
+.logout-btn{font-size:12px;color:var(--text2);background:none;border:0.5px solid var(--border2);border-radius:20px;padding:5px 12px;cursor:pointer;}
+
+.bottom-nav{display:flex;background:var(--surface);border-top:0.5px solid var(--border);padding:6px 0;padding-bottom:max(8px,env(safe-area-inset-bottom));flex-shrink:0;}
+.bnav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;cursor:pointer;padding:4px 0;color:var(--text3);font-size:10px;font-family:var(--font);}
+.bnav-item.active{color:var(--green);}
+.bnav-icon svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+
+.scroll-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 14px 20px;}
+
+.login-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 20px;background:var(--bg);padding-bottom:max(24px,env(safe-area-inset-bottom));}
+.logo-mark{width:60px;height:60px;background:var(--green);border-radius:18px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;}
+.logo-mark svg{width:30px;height:30px;stroke:white;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+.logo-name{font-size:24px;font-weight:700;text-align:center;letter-spacing:2px;}
+.logo-tag{font-size:13px;color:var(--text2);text-align:center;margin-top:4px;margin-bottom:28px;}
+.login-card{background:var(--surface);border:0.5px solid var(--border);border-radius:var(--rl);padding:20px;width:100%;max-width:380px;}
+.seg-ctrl{display:flex;background:var(--surface2);border-radius:var(--r);padding:3px;margin-bottom:18px;}
+.seg-btn{flex:1;padding:10px;font-size:14px;text-align:center;background:none;border:none;border-radius:8px;cursor:pointer;color:var(--text2);transition:all .15s;font-family:var(--font);}
+.seg-btn.active{background:var(--surface);color:var(--text);font-weight:500;border:0.5px solid var(--border);}
+.form-lbl{font-size:12px;color:var(--text2);margin-bottom:7px;display:block;font-weight:500;}
+.form-grp{margin-bottom:14px;}
+select,input[type=text],input[type=number],input[type=password]{width:100%;padding:13px 12px;font-size:16px;background:var(--surface2);border:0.5px solid var(--border);border-radius:var(--r);color:var(--text);font-family:var(--font);-webkit-appearance:none;appearance:none;outline:none;}
+select:focus,input:focus{border-color:var(--green);}
+.btn-main{width:100%;padding:15px;background:var(--green);color:white;border:none;border-radius:var(--r);font-size:16px;font-weight:700;cursor:pointer;font-family:var(--font);transition:opacity .15s;}
+.btn-main:active{opacity:.82;}
+
+.sec-lbl{font-size:11px;font-weight:700;color:var(--text2);letter-spacing:.8px;text-transform:uppercase;margin-bottom:9px;margin-top:18px;}
+.sec-lbl:first-child{margin-top:0;}
+.store-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:4px;}
+.store-btn{padding:15px 8px;font-size:14px;text-align:center;background:var(--surface);border:0.5px solid var(--border);border-radius:var(--r);cursor:pointer;color:var(--text);font-family:var(--font);min-height:52px;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+.store-btn.selected{background:var(--green);border-color:var(--green);color:white;font-weight:700;}
+.store-btn:active{opacity:.75;}
+.count-wrap{background:var(--surface);border:0.5px solid var(--border);border-radius:var(--rl);padding:16px;display:flex;align-items:center;gap:12px;margin-bottom:14px;}
+.cnt-btn{width:54px;height:54px;border:0.5px solid var(--border2);border-radius:var(--r);background:var(--surface2);font-size:26px;cursor:pointer;color:var(--text);display:flex;align-items:center;justify-content:center;flex-shrink:0;user-select:none;}
+.cnt-btn:active{background:var(--border);}
+.cnt-inp{flex:1;font-size:32px;font-weight:700;text-align:center;border:none;background:transparent;color:var(--text);font-family:var(--font);outline:none;}
+.submit-btn{width:100%;padding:17px;background:var(--green);color:white;border:none;border-radius:var(--r);font-size:17px;font-weight:700;cursor:pointer;font-family:var(--font);transition:opacity .15s;}
+.submit-btn:disabled{background:var(--surface2);color:var(--text3);cursor:default;}
+.submit-btn:not(:disabled):active{opacity:.82;}
+
+.log-item{background:var(--surface);border:0.5px solid var(--border);border-radius:var(--r);padding:13px 14px;display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;}
+.log-time{font-size:11px;color:var(--text3);margin-top:2px;}
+.log-cnt{font-size:22px;font-weight:700;color:var(--green);}
+.log-unit{font-size:12px;color:var(--green-text);margin-left:2px;}
+.total-bar{background:var(--green-light);border-radius:var(--r);padding:14px 16px;display:flex;justify-content:space-between;align-items:center;margin-top:6px;}
+.total-lbl{font-size:13px;color:var(--green-dark);font-weight:700;}
+.total-val{font-size:24px;font-weight:700;color:var(--green-dark);}
+.empty{text-align:center;padding:48px 16px;color:var(--text3);font-size:14px;}
+
+.rank-item{background:var(--surface);border:0.5px solid var(--border);border-radius:var(--r);padding:13px 14px;display:flex;align-items:center;gap:12px;margin-bottom:7px;}
+.rank-num{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;background:var(--surface2);color:var(--text2);}
+.rn-1{background:var(--gold);color:#412402;}
+.rn-2{background:var(--silver);color:#2C2C2A;}
+.rn-3{background:var(--bronze);color:#4A1B0C;}
+.rank-name{flex:1;font-size:15px;font-weight:500;}
+.rank-val{font-size:22px;font-weight:700;color:var(--green);}
+.rank-me{font-size:10px;color:var(--green-text);background:var(--green-light);padding:2px 7px;border-radius:20px;margin-left:6px;font-weight:700;}
+
+.filter-row{display:flex;gap:8px;margin-bottom:12px;}
+.fsel{flex:1;padding:10px;font-size:13px;background:var(--surface);border:0.5px solid var(--border);border-radius:var(--r);color:var(--text);font-family:var(--font);-webkit-appearance:none;appearance:none;outline:none;}
+
+.atab-row{display:flex;background:var(--surface);border-bottom:0.5px solid var(--border);overflow-x:auto;flex-shrink:0;}
+.atab{padding:12px 16px;font-size:13px;color:var(--text2);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap;font-family:var(--font);}
+.atab.active{color:var(--text);border-bottom-color:var(--green);font-weight:700;}
+
+.stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px;}
+.stat-card{background:var(--surface2);border-radius:var(--r);padding:13px;}
+.stat-lbl{font-size:11px;color:var(--text2);margin-bottom:4px;font-weight:500;}
+.stat-val{font-size:28px;font-weight:700;line-height:1;}
+.stat-unit{font-size:13px;color:var(--text2);font-weight:400;margin-left:2px;}
+
+.tbl-wrap{background:var(--surface);border:0.5px solid var(--border);border-radius:var(--rl);overflow:hidden;margin-bottom:14px;}
+table{width:100%;border-collapse:collapse;table-layout:fixed;}
+th{padding:9px 12px;font-size:11px;color:var(--text2);font-weight:700;text-transform:uppercase;letter-spacing:.4px;background:var(--surface2);border-bottom:0.5px solid var(--border);text-align:left;}
+td{padding:11px 12px;font-size:13px;border-bottom:0.5px solid var(--border);}
+tr:last-child td{border-bottom:none;}
+.badge-g{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;background:var(--green-light);color:var(--green-text);font-weight:700;}
+
+.set-card{background:var(--surface);border:0.5px solid var(--border);border-radius:var(--rl);padding:14px 16px;margin-bottom:12px;}
+.set-sec{font-size:11px;font-weight:700;color:var(--text2);letter-spacing:.6px;text-transform:uppercase;margin-bottom:10px;}
+.set-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.set-row span{flex:1;font-size:14px;}
+.btn-add{padding:10px 14px;font-size:13px;background:var(--text);color:var(--surface);border:none;border-radius:var(--r);cursor:pointer;white-space:nowrap;flex-shrink:0;font-family:var(--font);font-weight:700;}
+.btn-add:active{opacity:.75;}
+.btn-del{padding:8px 10px;font-size:12px;color:var(--red);background:none;border:0.5px solid var(--red-border);border-radius:var(--r);cursor:pointer;white-space:nowrap;flex-shrink:0;font-family:var(--font);}
+.btn-del:active{background:var(--red-light);}
+.detail-row{background:var(--surface);border:0.5px solid var(--border);border-radius:var(--r);padding:12px 14px;display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+
+.toast{position:fixed;bottom:calc(70px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:#1a1a18;color:white;padding:12px 20px;border-radius:30px;font-size:14px;font-weight:500;z-index:9999;opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap;max-width:90vw;}
+.toast.show{opacity:1;}
+
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;align-items:flex-end;justify-content:center;}
+.modal-bg.open{display:flex;}
+.modal{background:var(--surface);border-radius:var(--rl) var(--rl) 0 0;padding:20px;width:100%;max-width:480px;padding-bottom:max(20px,env(safe-area-inset-bottom));}
+.modal h3{font-size:16px;font-weight:700;margin-bottom:16px;}
+.modal-btns{display:flex;gap:8px;margin-top:16px;}
+.modal-btns button{flex:1;padding:14px;border-radius:var(--r);font-size:15px;font-family:var(--font);font-weight:700;cursor:pointer;border:none;}
+.modal-cancel{background:var(--surface2);color:var(--text2);}
+.modal-confirm{background:var(--red);color:white;}
+</style>
+</head>
+<body>
+
+<div id="loading-screen">
+  <div class="spinner"></div>
+  <div class="loading-txt">Firebaseに接続中...</div>
+</div>
+
+<div id="s-login" class="screen">
+  <div class="login-wrap">
+    <div class="logo-mark"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+    <div class="logo-name">CATCH LOG</div>
+    <div class="logo-tag">キャッチ管理システム</div>
+    <div class="login-card">
+      <div class="seg-ctrl">
+        <button class="seg-btn active" onclick="switchLoginTab('user')">スタッフ</button>
+        <button class="seg-btn" onclick="switchLoginTab('admin')">管理者</button>
+      </div>
+      <div id="lf-user">
+        <div class="form-grp"><label class="form-lbl">名前を選択</label><select id="user-sel"></select></div>
+        <button class="btn-main" onclick="loginUser()">ログイン</button>
+      </div>
+      <div id="lf-admin" style="display:none;">
+        <div class="form-grp"><label class="form-lbl">管理者パスワード</label><input type="password" id="adm-pass" placeholder="パスワードを入力"/></div>
+        <button class="btn-main" onclick="loginAdmin()">ログイン</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="s-user" class="screen">
+  <div class="topbar">
+    <div class="topbar-title">CATCH LOG<span class="sync-dot" id="sync-dot"></span></div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span class="topbar-sub" id="u-name-disp"></span>
+      <button class="logout-btn" onclick="logout()">ログアウト</button>
+    </div>
+  </div>
+  <div id="u-body" style="flex:1;overflow:hidden;display:flex;flex-direction:column;"></div>
+  <div class="bottom-nav">
+    <button class="bnav-item active" id="ubn-0" onclick="switchUserTab(0)">
+      <div class="bnav-icon"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></div>入力
+    </button>
+    <button class="bnav-item" id="ubn-1" onclick="switchUserTab(1)">
+      <div class="bnav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>今日の記録
+    </button>
+    <button class="bnav-item" id="ubn-2" onclick="switchUserTab(2)">
+      <div class="bnav-icon"><svg viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></div>ランキング
+    </button>
+  </div>
+</div>
+
+<div id="s-admin" class="screen">
+  <div class="topbar">
+    <div class="topbar-title">管理画面<span class="sync-dot" id="sync-dot-admin"></span></div>
+    <button class="logout-btn" onclick="logout()">ログアウト</button>
+  </div>
+  <div class="atab-row">
+    <button class="atab active" id="abn-0" onclick="switchAdminTab(0)">集計</button>
+    <button class="atab" id="abn-1" onclick="switchAdminTab(1)">詳細ログ</button>
+    <button class="atab" id="abn-2" onclick="switchAdminTab(2)">ランキング</button>
+    <button class="atab" id="abn-3" onclick="switchAdminTab(3)">設定</button>
+  </div>
+  <div id="a-body" class="scroll-body"></div>
+</div>
+
+<div class="modal-bg" id="modal-bg">
+  <div class="modal">
+    <h3 id="modal-msg">削除しますか？</h3>
+    <div class="modal-btns">
+      <button class="modal-cancel" onclick="closeModal()">キャンセル</button>
+      <button class="modal-confirm" onclick="confirmModal()">削除する</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast-el"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, onValue, set, push, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyA0nFCp4AM82yEZcynOKPRMtH4cSoiGeE4",
+  authDomain: "catch-log-baf7a.firebaseapp.com",
+  databaseURL: "https://catch-log-baf7a-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "catch-log-baf7a",
+  storageBucket: "catch-log-baf7a.firebasestorage.app",
+  messagingSenderId: "715979493564",
+  appId: "1:715979493564:web:99e5573141f630b79bc0b9"
+};
+
+const fbApp = initializeApp(firebaseConfig);
+const db = getDatabase(fbApp);
+
+let state = { staff:[], stores:[], logs:{}, adminPass:'admin1234' };
+let me=null, role=null, selStore=null, uTab=0, aTab=0, modalCb=null, initialized=false;
+
+// ── FIREBASE ──
+onValue(ref(db,'/'), snap => {
+  const d = snap.val() || {};
+  state.staff     = d.staff     || ['田中','佐藤','鈴木','山田','伊藤'];
+  state.stores    = d.stores    || ['渋谷店','新宿店','池袋店','銀座店','横浜店'];
+  state.logs      = d.logs      || {};
+  state.adminPass = d.adminPass || 'admin1234';
+
+  if (!initialized) {
+    if (!d.staff)      set(ref(db,'staff'),      state.staff);
+    if (!d.stores)     set(ref(db,'stores'),     state.stores);
+    if (!d.adminPass)  set(ref(db,'adminPass'),  state.adminPass);
+    initialized = true;
+    document.getElementById('loading-screen').classList.add('hidden');
+    showScreen('s-login');
+  }
+
+  setSyncOnline(true);
+  populateUserSelect();
+  if (role==='user')  refreshCurrentUserTab();
+  if (role==='admin') refreshCurrentAdminTab();
+}, () => {
+  setSyncOnline(false);
+  if (!initialized) {
+    initialized = true;
+    document.getElementById('loading-screen').classList.add('hidden');
+    showScreen('s-login');
+  }
+});
+
+function setSyncOnline(on) {
+  document.querySelectorAll('.sync-dot').forEach(d => d.classList.toggle('offline', !on));
+}
+
+// ── UTILS ──
+const getToday = () => new Date().toISOString().slice(0,10);
+const getMonths = () => [...new Set(Object.values(state.logs).map(l=>l.datetime.slice(0,7)))].sort().reverse();
+const fmtTime = dt => new Date(dt).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+const fmtDt   = dt => new Date(dt).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+
+function filterLogs(mId, sId, stId) {
+  const m  = document.getElementById(mId)?.value;
+  const s  = document.getElementById(sId)?.value;
+  const st = stId ? document.getElementById(stId)?.value : null;
+  return Object.entries(state.logs).map(([id,l])=>({...l,_id:id})).filter(l=>{
+    if (m==='today' && l.datetime.slice(0,10)!==getToday()) return false;
+    if (m && m!=='today' && m!=='all' && !l.datetime.startsWith(m)) return false;
+    if (s && s!=='all' && l.store!==s) return false;
+    if (st && st!=='all' && l.staff!==st) return false;
+    return true;
+  });
+}
+
+// ── TOAST / MODAL ──
+function toast(m) {
+  const t=document.getElementById('toast-el');
+  t.textContent=m; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2200);
+}
+window.closeModal   = () => { document.getElementById('modal-bg').classList.remove('open'); modalCb=null; };
+window.confirmModal = () => { window.closeModal(); if(modalCb) modalCb(); };
+function openModal(msg,cb) {
+  document.getElementById('modal-msg').textContent=msg;
+  modalCb=cb;
+  document.getElementById('modal-bg').classList.add('open');
+}
+
+// ── SCREENS ──
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+// ── LOGIN ──
+function populateUserSelect() {
+  const sel=document.getElementById('user-sel'); if(!sel) return;
+  const cur=sel.value;
+  sel.innerHTML='<option value="">-- 名前を選んでください --</option>'+
+    state.staff.map(s=>`<option value="${s}"${s===cur?' selected':''}>${s}</option>`).join('');
+}
+window.switchLoginTab = t => {
+  document.querySelectorAll('.seg-btn').forEach((b,i)=>b.classList.toggle('active',i===(t==='user'?0:1)));
+  document.getElementById('lf-user').style.display  = t==='user'  ?'block':'none';
+  document.getElementById('lf-admin').style.display = t==='admin' ?'block':'none';
+};
+window.loginUser = () => {
+  const n=document.getElementById('user-sel').value;
+  if(!n){toast('名前を選んでください');return;}
+  me=n; role='user'; selStore=null;
+  document.getElementById('u-name-disp').textContent=n;
+  switchUserTab(0); showScreen('s-user');
+};
+window.loginAdmin = () => {
+  const p=document.getElementById('adm-pass').value;
+  if(p!==state.adminPass){toast('パスワードが違います');return;}
+  role='admin'; switchAdminTab(0); showScreen('s-admin');
+};
+window.logout = () => {
+  me=null; role=null; selStore=null;
+  document.getElementById('adm-pass').value='';
+  document.getElementById('user-sel').value='';
+  showScreen('s-login');
+};
+
+// ── USER TABS ──
+function switchUserTab(i) {
+  uTab=i;
+  document.querySelectorAll('.bnav-item').forEach((b,j)=>b.classList.toggle('active',j===i));
+  const body=document.getElementById('u-body');
+  body.innerHTML='';
+  const wrap=document.createElement('div');
+  wrap.className='scroll-body';
+  wrap.style.cssText='flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;';
+  if(i===0){wrap.innerHTML=renderInputTab(); body.appendChild(wrap); bindStoreButtons();}
+  if(i===1){wrap.innerHTML=renderTodayTab(); body.appendChild(wrap);}
+  if(i===2){wrap.innerHTML=renderRankingTab(); body.appendChild(wrap);}
+}
+window.switchUserTab=switchUserTab;
+
+function refreshCurrentUserTab() {
+  if(role!=='user') return;
+  if(uTab===1){ const b=document.getElementById('u-body'); if(b&&b.firstChild) b.firstChild.innerHTML=renderTodayTab(); }
+  if(uTab===2) refreshRanking();
+}
+
+// ── INPUT ──
+function renderInputTab() {
+  return `
+    <div class="sec-lbl">店舗を選択</div>
+    <div class="store-grid" id="sg">
+      ${state.stores.map(s=>`<button class="store-btn${selStore===s?' selected':''}" data-store="${s}">${s}</button>`).join('')}
+    </div>
+    <div class="sec-lbl">人数</div>
+    <div class="count-wrap">
+      <button class="cnt-btn" onclick="adj(-1)">−</button>
+      <input type="number" class="cnt-inp" id="cnt" value="1" min="1" max="99" inputmode="numeric"/>
+      <button class="cnt-btn" onclick="adj(1)">＋</button>
+    </div>
+    <button class="submit-btn" id="sbtn" onclick="submitCatch()" ${selStore?'':'disabled'}>
+      ${selStore?selStore+' に記録する':'店舗を選んでください'}
+    </button>`;
+}
+function bindStoreButtons() {
+  document.querySelectorAll('[data-store]').forEach(b=>{
+    b.addEventListener('click',()=>{
+      selStore = selStore===b.dataset.store ? null : b.dataset.store;
+      document.querySelectorAll('[data-store]').forEach(x=>x.classList.toggle('selected',x.dataset.store===selStore));
+      const sbtn=document.getElementById('sbtn');
+      if(sbtn){sbtn.disabled=!selStore; sbtn.textContent=selStore?selStore+' に記録する':'店舗を選んでください';}
+    });
+  });
+}
+window.adj = d => {
+  const i=document.getElementById('cnt');
+  if(i) i.value=Math.max(1,Math.min(99,(parseInt(i.value)||1)+d));
+};
+window.submitCatch = async () => {
+  const c=parseInt(document.getElementById('cnt')?.value)||1;
+  if(!selStore||!me) return;
+  const sbtn=document.getElementById('sbtn');
+  if(sbtn){sbtn.disabled=true; sbtn.textContent='送信中...';}
+  await push(ref(db,'logs'),{staff:me,store:selStore,count:c,datetime:new Date().toISOString()});
+  toast(selStore+' に '+c+'人 登録しました！');
+  selStore=null; switchUserTab(0);
+};
+
+// ── TODAY ──
+function renderTodayTab() {
+  const today=getToday();
+  const logs=Object.entries(state.logs).map(([id,l])=>({...l,_id:id}))
+    .filter(l=>l.datetime.slice(0,10)===today && l.staff===me)
+    .sort((a,b)=>new Date(b.datetime)-new Date(a.datetime));
+  const total=logs.reduce((s,l)=>s+l.count,0);
+  if(!logs.length) return '<div class="empty">今日の記録はまだありません</div>';
+  return logs.map(l=>`
+    <div class="log-item">
+      <div><div style="font-size:15px;font-weight:500;">${l.store}</div><div class="log-time">${fmtTime(l.datetime)}</div></div>
+      <div><span class="log-cnt">${l.count}</span><span class="log-unit">人</span></div>
+    </div>`).join('')+
+    `<div class="total-bar"><span class="total-lbl">今日の合計</span><span class="total-val">${total}人</span></div>`;
+}
+
+// ── RANKING ──
+function renderRankingTab() {
+  const months=getMonths();
+  const mO='<option value="today">今日</option>'+months.map(m=>`<option value="${m}">${m}</option>`).join('');
+  const sO='<option value="all">全店舗</option>'+state.stores.map(s=>`<option value="${s}">${s}</option>`).join('');
+  return `
+    <div class="filter-row">
+      <select class="fsel" id="rm" onchange="refreshRanking()">${mO}</select>
+      <select class="fsel" id="rs" onchange="refreshRanking()">${sO}</select>
+    </div>
+    <div id="rank-body">${buildRanking(Object.values(state.logs).filter(l=>l.datetime.slice(0,10)===getToday()))}</div>`;
+}
+function refreshRanking(){const el=document.getElementById('rank-body');if(el)el.innerHTML=buildRanking(filterLogs('rm','rs',null));}
+window.refreshRanking=refreshRanking;
+
+function buildRanking(logs) {
+  const agg={};
+  logs.forEach(l=>{agg[l.staff]=(agg[l.staff]||0)+l.count;});
+  const sorted=Object.entries(agg).sort((a,b)=>b[1]-a[1]);
+  if(!sorted.length) return '<div class="empty">データがありません</div>';
+  const rc=['rn-1','rn-2','rn-3'];
+  return sorted.map(([name,cnt],i)=>`
+    <div class="rank-item">
+      <div class="rank-num ${rc[i]||''}">${i+1}</div>
+      <div class="rank-name">${name}${name===me?'<span class="rank-me">自分</span>':''}</div>
+      <div><span class="rank-val">${cnt}</span><span style="font-size:12px;color:var(--green-text);margin-left:2px;">人</span></div>
+    </div>`).join('');
+}
+
+// ── ADMIN TABS ──
+function switchAdminTab(i) {
+  aTab=i;
+  document.querySelectorAll('.atab').forEach((b,j)=>b.classList.toggle('active',j===i));
+  const body=document.getElementById('a-body');
+  if(i===0) body.innerHTML=renderAdminSummary();
+  if(i===1) body.innerHTML=renderAdminDetail();
+  if(i===2) body.innerHTML=renderAdminRanking();
+  if(i===3) body.innerHTML=renderSettings();
+}
+window.switchAdminTab=switchAdminTab;
+
+function refreshCurrentAdminTab() {
+  if(role!=='admin') return;
+  const body=document.getElementById('a-body'); if(!body) return;
+  if(aTab===0) body.innerHTML=renderAdminSummary();
+  if(aTab===1) refreshDetail();
+  if(aTab===2) refreshAdminRank();
+}
+
+// ── ADMIN SUMMARY ──
+function renderAdminSummary() {
+  const months=getMonths();
+  const mO='<option value="today">今日</option>'+months.map(m=>`<option value="${m}">${m}</option>`).join('');
+  const sO='<option value="all">全店舗</option>'+state.stores.map(s=>`<option value="${s}">${s}</option>`).join('');
+  const logs=Object.values(state.logs).filter(l=>l.datetime.slice(0,10)===getToday());
+  return `
+    <div class="filter-row">
+      <select class="fsel" id="am" onchange="refreshAdminSummary()">${mO}</select>
+      <select class="fsel" id="as2" onchange="refreshAdminSummary()">${sO}</select>
+    </div>
+    <div class="stat-grid" id="ast">${buildStats(logs)}</div>
+    <div class="sec-lbl">店舗別集計</div>
+    <div class="tbl-wrap" id="store-tbl">${buildStoreTbl(logs)}</div>
+    <div class="sec-lbl">スタッフ別集計</div>
+    <div class="tbl-wrap" id="staff-tbl">${buildStaffTbl(logs)}</div>`;
+}
+window.refreshAdminSummary=()=>{
+  const logs=filterLogs('am','as2',null);
+  document.getElementById('ast').innerHTML=buildStats(logs);
+  document.getElementById('store-tbl').innerHTML=buildStoreTbl(logs);
+  document.getElementById('staff-tbl').innerHTML=buildStaffTbl(logs);
+};
+function buildStats(logs) {
+  const total=logs.reduce((s,l)=>s+l.count,0);
+  const sc=new Set(logs.map(l=>l.staff)).size;
+  return `
+    <div class="stat-card"><div class="stat-lbl">合計人数</div><div class="stat-val">${total}<span class="stat-unit">人</span></div></div>
+    <div class="stat-card"><div class="stat-lbl">件数</div><div class="stat-val">${logs.length}<span class="stat-unit">件</span></div></div>
+    <div class="stat-card"><div class="stat-lbl">活動スタッフ</div><div class="stat-val">${sc}<span class="stat-unit">名</span></div></div>`;
+}
+function buildStoreTbl(logs) {
+  const total=logs.reduce((s,l)=>s+l.count,0);
+  const agg={}; state.stores.forEach(s=>agg[s]=0);
+  logs.forEach(l=>{agg[l.store]=(agg[l.store]||0)+l.count;});
+  return `<table><thead><tr><th style="width:40%">店舗</th><th style="width:30%">人数</th><th style="width:30%">割合</th></tr></thead><tbody>
+    ${Object.entries(agg).sort((a,b)=>b[1]-a[1]).map(([s,c])=>`<tr><td>${s}</td><td><strong>${c}人</strong></td><td><span class="badge-g">${total?Math.round(c/total*100):0}%</span></td></tr>`).join('')}
+  </tbody></table>`;
+}
+function buildStaffTbl(logs) {
+  const agg={};
+  logs.forEach(l=>{agg[l.staff]=(agg[l.staff]||0)+l.count;});
+  const rows=Object.entries(agg).sort((a,b)=>b[1]-a[1]);
+  if(!rows.length) return '<div class="empty" style="padding:1.5rem;">データがありません</div>';
+  return `<table><thead><tr><th style="width:45%">スタッフ</th><th style="width:30%">人数</th><th style="width:25%">件数</th></tr></thead><tbody>
+    ${rows.map(([n,c])=>`<tr><td>${n}</td><td><strong>${c}人</strong></td><td>${logs.filter(l=>l.staff===n).length}件</td></tr>`).join('')}
+  </tbody></table>`;
+}
+
+// ── ADMIN DETAIL ──
+function renderAdminDetail() {
+  const months=getMonths();
+  const mO='<option value="today">今日</option>'+months.map(m=>`<option value="${m}">${m}</option>`).join('');
+  const sO='<option value="all">全店舗</option>'+state.stores.map(s=>`<option value="${s}">${s}</option>`).join('');
+  const stO='<option value="all">全スタッフ</option>'+state.staff.map(s=>`<option value="${s}">${s}</option>`).join('');
+  const logs=Object.entries(state.logs).map(([id,l])=>({...l,_id:id})).filter(l=>l.datetime.slice(0,10)===getToday());
+  return `
+    <div class="filter-row">
+      <select class="fsel" id="dm" onchange="refreshDetail()">${mO}</select>
+      <select class="fsel" id="ds" onchange="refreshDetail()">${sO}</select>
+    </div>
+    <div class="filter-row"><select class="fsel" id="dst" onchange="refreshDetail()">${stO}</select></div>
+    <div id="detail-body">${buildDetailList(logs)}</div>`;
+}
+function refreshDetail(){const el=document.getElementById('detail-body');if(el)el.innerHTML=buildDetailList(filterLogs('dm','ds','dst'));}
+window.refreshDetail=refreshDetail;
+function buildDetailList(logs) {
+  const sorted=logs.slice().sort((a,b)=>new Date(b.datetime)-new Date(a.datetime));
+  if(!sorted.length) return '<div class="empty">データがありません</div>';
+  return sorted.map(l=>`
+    <div class="detail-row">
+      <div>
+        <div style="font-size:14px;font-weight:500;">${l.staff} → ${l.store}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px;">${fmtDt(l.datetime)}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div><span class="log-cnt">${l.count}</span><span class="log-unit">人</span></div>
+        <button class="btn-del" onclick="delLog('${l._id}')">削除</button>
+      </div>
+    </div>`).join('');
+}
+window.delLog = id => openModal('この記録を削除しますか？', async()=>{
+  await remove(ref(db,'logs/'+id)); toast('削除しました');
+});
+
+// ── ADMIN RANKING ──
+function renderAdminRanking() {
+  const months=getMonths();
+  const mO='<option value="today">今日</option>'+months.map(m=>`<option value="${m}">${m}</option>`).join('');
+  const sO='<option value="all">全店舗</option>'+state.stores.map(s=>`<option value="${s}">${s}</option>`).join('');
+  return `
+    <div class="filter-row">
+      <select class="fsel" id="arm" onchange="refreshAdminRank()">${mO}</select>
+      <select class="fsel" id="ars" onchange="refreshAdminRank()">${sO}</select>
+    </div>
+    <div id="arn-body">${buildRanking(Object.values(state.logs).filter(l=>l.datetime.slice(0,10)===getToday()))}</div>`;
+}
+function refreshAdminRank(){const el=document.getElementById('arn-body');if(el)el.innerHTML=buildRanking(filterLogs('arm','ars',null));}
+window.refreshAdminRank=refreshAdminRank;
+
+// ── SETTINGS ──
+function renderSettings() {
+  return `
+    <div class="set-card">
+      <div class="set-sec">スタッフ管理</div>
+      ${state.staff.map(s=>`<div class="set-row"><span>${s}</span><button class="btn-del" onclick="rmStaff('${s.replace(/'/g,"\\'")}')">削除</button></div>`).join('')}
+      <div class="set-row" style="margin-top:10px;"><input type="text" id="ns" placeholder="新しいスタッフ名" style="flex:1;"/><button class="btn-add" onclick="addStaff()">追加</button></div>
+    </div>
+    <div class="set-card">
+      <div class="set-sec">店舗管理</div>
+      ${state.stores.map(s=>`<div class="set-row"><span>${s}</span><button class="btn-del" onclick="rmStore('${s.replace(/'/g,"\\'")}')">削除</button></div>`).join('')}
+      <div class="set-row" style="margin-top:10px;"><input type="text" id="nst" placeholder="新しい店舗名" style="flex:1;"/><button class="btn-add" onclick="addStore()">追加</button></div>
+    </div>
+    <div class="set-card">
+      <div class="set-sec">管理者パスワード変更</div>
+      <div class="set-row"><input type="password" id="np" placeholder="新しいパスワード（4文字以上）" style="flex:1;"/><button class="btn-add" onclick="chgPass()">変更</button></div>
+    </div>
+    <div class="set-card">
+      <div class="set-sec" style="color:var(--red);">データ管理</div>
+      <button class="btn-del" style="width:100%;padding:12px;text-align:center;" onclick="exportData()">JSONエクスポート</button>
+    </div>`;
+}
+window.addStaff = async()=>{
+  const v=document.getElementById('ns')?.value.trim(); if(!v) return;
+  if(state.staff.includes(v)){toast('すでに存在します');return;}
+  await set(ref(db,'staff'),[...state.staff,v]); toast(v+' を追加しました');
+};
+window.rmStaff = n => openModal(n+' を削除しますか？', async()=>{
+  await set(ref(db,'staff'),state.staff.filter(s=>s!==n)); toast('削除しました');
+});
+window.addStore = async()=>{
+  const v=document.getElementById('nst')?.value.trim(); if(!v) return;
+  if(state.stores.includes(v)){toast('すでに存在します');return;}
+  await set(ref(db,'stores'),[...state.stores,v]); toast(v+' を追加しました');
+};
+window.rmStore = n => openModal(n+' を削除しますか？', async()=>{
+  await set(ref(db,'stores'),state.stores.filter(s=>s!==n)); toast('削除しました');
+});
+window.chgPass = async()=>{
+  const v=document.getElementById('np')?.value;
+  if(!v||v.length<4){toast('4文字以上で設定してください');return;}
+  await set(ref(db,'adminPass'),v);
+  document.getElementById('np').value=''; toast('パスワードを変更しました');
+};
+window.exportData = ()=>{
+  const data={...state,logs:Object.values(state.logs)};
+  const a=document.createElement('a');
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  a.href=URL.createObjectURL(blob); a.download='catch_log_'+getToday()+'.json'; a.click();
+};
+</script>
+</body>
+</html>
