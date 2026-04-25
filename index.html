@@ -325,7 +325,7 @@ function toast(m) {
   setTimeout(()=>t.classList.remove('show'),2200);
 }
 window.closeModal   = () => { document.getElementById('modal-bg').classList.remove('open'); modalCb=null; };
-window.confirmModal = () => { window.closeModal(); if(modalCb) modalCb(); };
+window.confirmModal = () => { const cb=modalCb; window.closeModal(); if(cb) cb(); };
 function openModal(msg,cb) {
   document.getElementById('modal-msg').textContent=msg;
   modalCb=cb;
