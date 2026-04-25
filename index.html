@@ -122,6 +122,8 @@ tr:last-child td{border-bottom:none;}
 .btn-del{padding:8px 10px;font-size:12px;color:var(--red);background:none;border:0.5px solid var(--red-border);border-radius:var(--r);cursor:pointer;white-space:nowrap;flex-shrink:0;font-family:var(--font);}
 .btn-del:active{background:var(--red-light);}
 .detail-row{background:var(--surface);border:0.5px solid var(--border);border-radius:var(--r);padding:12px 14px;display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+.rank-period-btn{flex:1;padding:10px;font-size:14px;text-align:center;background:none;border:none;border-radius:8px;cursor:pointer;color:var(--text2);font-family:var(--font);transition:all .15s;}
+.rank-period-btn.rp-active{background:var(--surface);color:var(--green);font-weight:700;border:0.5px solid var(--border);}
 
 .toast{position:fixed;bottom:calc(70px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:#1a1a18;color:white;padding:12px 20px;border-radius:30px;font-size:14px;font-weight:500;z-index:9999;opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap;max-width:90vw;}
 .toast.show{opacity:1;}
@@ -268,7 +270,37 @@ function setSyncOnline(on) {
 }
 
 // ── UTILS ──
-const getToday = () => new Date().toISOString().slice(0,10);
+// 営業日: 20:00〜翌4:59 を「今日」とする
+// 現在時刻が0:00〜4:59なら「前日の営業日」扱い
+function getBusinessDayStart() {
+  const now = new Date();
+  const h = now.getHours();
+  const base = new Date(now);
+  if (h < 5) base.setDate(base.getDate() - 1); // 深夜は前日扱い
+  base.setHours(20, 0, 0, 0);
+  return base;
+}
+function getBusinessDayEnd() {
+  const start = getBusinessDayStart();
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  end.setHours(5, 0, 0, 0);
+  return end;
+}
+// 表示用「今日の営業日」ラベル (例: "4/25営業日")
+function getTodayLabel() {
+  const start = getBusinessDayStart();
+  return (start.getMonth()+1) + '/' + start.getDate() + ' 営業日';
+}
+const getToday = () => {
+  // 後方互換: 営業日開始日のYYYY-MM-DDを返す
+  const s = getBusinessDayStart();
+  return s.toISOString().slice(0,10);
+};
+function isToday(datetime) {
+  const t = new Date(datetime);
+  return t >= getBusinessDayStart() && t < getBusinessDayEnd();
+}
 const getMonths = () => [...new Set(Object.values(state.logs).map(l=>l.datetime.slice(0,7)))].sort().reverse();
 const fmtTime = dt => new Date(dt).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
 const fmtDt   = dt => new Date(dt).toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
@@ -278,7 +310,7 @@ function filterLogs(mId, sId, stId) {
   const s  = document.getElementById(sId)?.value;
   const st = stId ? document.getElementById(stId)?.value : null;
   return Object.entries(state.logs).map(([id,l])=>({...l,_id:id})).filter(l=>{
-    if (m==='today' && l.datetime.slice(0,10)!==getToday()) return false;
+    if (m==='today' && !isToday(l.datetime)) return false;
     if (m && m!=='today' && m!=='all' && !l.datetime.startsWith(m)) return false;
     if (s && s!=='all' && l.store!==s) return false;
     if (st && st!=='all' && l.staff!==st) return false;
@@ -403,7 +435,7 @@ window.submitCatch = async () => {
 function renderTodayTab() {
   const today=getToday();
   const logs=Object.entries(state.logs).map(([id,l])=>({...l,_id:id}))
-    .filter(l=>l.datetime.slice(0,10)===today && l.staff===me)
+    .filter(l=>isToday(l.datetime) && l.staff===me)
     .sort((a,b)=>new Date(b.datetime)-new Date(a.datetime));
   const total=logs.reduce((s,l)=>s+l.count,0);
   if(!logs.length) return '<div class="empty">今日の記録はまだありません</div>';
@@ -416,18 +448,64 @@ function renderTodayTab() {
 }
 
 // ── RANKING ──
-function renderRankingTab() {
-  const months=getMonths();
-  const mO='<option value="today">今日</option>'+months.map(m=>`<option value="${m}">${m}</option>`).join('');
-  const sO='<option value="all">全店舗</option>'+state.stores.map(s=>`<option value="${s}">${s}</option>`).join('');
-  return `
-    <div class="filter-row">
-      <select class="fsel" id="rm" onchange="refreshRanking()">${mO}</select>
-      <select class="fsel" id="rs" onchange="refreshRanking()">${sO}</select>
-    </div>
-    <div id="rank-body">${buildRanking(Object.values(state.logs).filter(l=>l.datetime.slice(0,10)===getToday()))}</div>`;
+let rankPeriod='today';
+let rankStore='all';
+
+function getWeekStart() {
+  // 今の営業日起点から今週の月曜20時を求める
+  const now=new Date();
+  const base=new Date(now);
+  if(now.getHours()<5) base.setDate(base.getDate()-1);
+  const day=base.getDay()||7; // Mon=1...Sun=7
+  base.setDate(base.getDate()-(day-1));
+  base.setHours(20,0,0,0);
+  return base;
 }
-function refreshRanking(){const el=document.getElementById('rank-body');if(el)el.innerHTML=buildRanking(filterLogs('rm','rs',null));}
+function getMonthStart() {
+  const now=new Date();
+  const base=new Date(now);
+  if(now.getHours()<5) base.setDate(base.getDate()-1);
+  base.setDate(1); base.setHours(20,0,0,0);
+  return base;
+}
+
+function logsForPeriod(period) {
+  const all=Object.values(state.logs);
+  if(period==='today') return all.filter(l=>isToday(l.datetime));
+  if(period==='week')  { const ws=getWeekStart(); return all.filter(l=>new Date(l.datetime)>=ws); }
+  if(period==='month') { const ms=getMonthStart(); return all.filter(l=>new Date(l.datetime)>=ms); }
+  return all;
+}
+
+function renderRankingTab() {
+  const sO='<option value="all">全店舗</option>'+state.stores.map(s=>`<option value="${s}">${s}</option>`).join('');
+  const logs=logsForPeriod(rankPeriod).filter(l=>rankStore==='all'||l.store===rankStore);
+  return `
+    <div style="display:flex;background:var(--surface2);border-radius:var(--r);padding:3px;margin-bottom:12px;">
+      <button class="rank-period-btn${rankPeriod==='today'?' rp-active':''}" onclick="setRankPeriod('today')">今日</button>
+      <button class="rank-period-btn${rankPeriod==='week'?' rp-active':''}" onclick="setRankPeriod('week')">今週</button>
+      <button class="rank-period-btn${rankPeriod==='month'?' rp-active':''}" onclick="setRankPeriod('month')">今月</button>
+    </div>
+    <div class="filter-row" style="margin-bottom:12px;">
+      <select class="fsel" id="rs" onchange="setRankStore(this.value)">${sO}</select>
+    </div>
+    <div id="rank-body">${buildRanking(logs)}</div>`;
+}
+window.setRankPeriod = p => {
+  rankPeriod=p;
+  const w=document.getElementById('u-body')?.firstChild;
+  if(w) w.innerHTML=renderRankingTab();
+};
+window.setRankStore = v => {
+  rankStore=v;
+  const logs=logsForPeriod(rankPeriod).filter(l=>rankStore==='all'||l.store===rankStore);
+  const el=document.getElementById('rank-body');
+  if(el) el.innerHTML=buildRanking(logs);
+};
+function refreshRanking(){
+  const w=document.getElementById('u-body')?.firstChild;
+  if(w && uTab===2) w.innerHTML=renderRankingTab();
+}
 window.refreshRanking=refreshRanking;
 
 function buildRanking(logs) {
@@ -462,6 +540,7 @@ function refreshCurrentAdminTab() {
   if(aTab===0) body.innerHTML=renderAdminSummary();
   if(aTab===1) refreshDetail();
   if(aTab===2) refreshAdminRank();
+  if(aTab===3) body.innerHTML=renderSettings();
 }
 
 // ── ADMIN SUMMARY ──
@@ -469,7 +548,7 @@ function renderAdminSummary() {
   const months=getMonths();
   const mO='<option value="today">今日</option>'+months.map(m=>`<option value="${m}">${m}</option>`).join('');
   const sO='<option value="all">全店舗</option>'+state.stores.map(s=>`<option value="${s}">${s}</option>`).join('');
-  const logs=Object.values(state.logs).filter(l=>l.datetime.slice(0,10)===getToday());
+  const logs=Object.values(state.logs).filter(l=>isToday(l.datetime));
   return `
     <div class="filter-row">
       <select class="fsel" id="am" onchange="refreshAdminSummary()">${mO}</select>
@@ -519,7 +598,7 @@ function renderAdminDetail() {
   const mO='<option value="today">今日</option>'+months.map(m=>`<option value="${m}">${m}</option>`).join('');
   const sO='<option value="all">全店舗</option>'+state.stores.map(s=>`<option value="${s}">${s}</option>`).join('');
   const stO='<option value="all">全スタッフ</option>'+state.staff.map(s=>`<option value="${s}">${s}</option>`).join('');
-  const logs=Object.entries(state.logs).map(([id,l])=>({...l,_id:id})).filter(l=>l.datetime.slice(0,10)===getToday());
+  const logs=Object.entries(state.logs).map(([id,l])=>({...l,_id:id})).filter(l=>isToday(l.datetime));
   return `
     <div class="filter-row">
       <select class="fsel" id="dm" onchange="refreshDetail()">${mO}</select>
@@ -550,18 +629,35 @@ window.delLog = id => openModal('この記録を削除しますか？', async()=
 });
 
 // ── ADMIN RANKING ──
+let adminRankPeriod='today';
+let adminRankStore='all';
 function renderAdminRanking() {
-  const months=getMonths();
-  const mO='<option value="today">今日</option>'+months.map(m=>`<option value="${m}">${m}</option>`).join('');
   const sO='<option value="all">全店舗</option>'+state.stores.map(s=>`<option value="${s}">${s}</option>`).join('');
+  const logs=logsForPeriod(adminRankPeriod).filter(l=>adminRankStore==='all'||l.store===adminRankStore);
   return `
-    <div class="filter-row">
-      <select class="fsel" id="arm" onchange="refreshAdminRank()">${mO}</select>
-      <select class="fsel" id="ars" onchange="refreshAdminRank()">${sO}</select>
+    <div style="display:flex;background:var(--surface2);border-radius:var(--r);padding:3px;margin-bottom:12px;">
+      <button class="rank-period-btn${adminRankPeriod==='today'?' rp-active':''}" onclick="setAdminRankPeriod('today')">今日</button>
+      <button class="rank-period-btn${adminRankPeriod==='week'?' rp-active':''}" onclick="setAdminRankPeriod('week')">今週</button>
+      <button class="rank-period-btn${adminRankPeriod==='month'?' rp-active':''}" onclick="setAdminRankPeriod('month')">今月</button>
     </div>
-    <div id="arn-body">${buildRanking(Object.values(state.logs).filter(l=>l.datetime.slice(0,10)===getToday()))}</div>`;
+    <div class="filter-row" style="margin-bottom:12px;">
+      <select class="fsel" id="ars" onchange="setAdminRankStore(this.value)">${sO}</select>
+    </div>
+    <div id="arn-body">${buildRanking(logs)}</div>`;
 }
-function refreshAdminRank(){const el=document.getElementById('arn-body');if(el)el.innerHTML=buildRanking(filterLogs('arm','ars',null));}
+window.setAdminRankPeriod = p => {
+  adminRankPeriod=p;
+  const body=document.getElementById('a-body'); if(body) body.innerHTML=renderAdminRanking();
+};
+window.setAdminRankStore = v => {
+  adminRankStore=v;
+  const logs=logsForPeriod(adminRankPeriod).filter(l=>adminRankStore==='all'||l.store===adminRankStore);
+  const el=document.getElementById('arn-body'); if(el) el.innerHTML=buildRanking(logs);
+};
+function refreshAdminRank(){
+  const body=document.getElementById('a-body');
+  if(body && aTab===2) body.innerHTML=renderAdminRanking();
+}
 window.refreshAdminRank=refreshAdminRank;
 
 // ── SETTINGS ──
@@ -589,18 +685,26 @@ function renderSettings() {
 window.addStaff = async()=>{
   const v=document.getElementById('ns')?.value.trim(); if(!v) return;
   if(state.staff.includes(v)){toast('すでに存在します');return;}
-  await set(ref(db,'staff'),[...state.staff,v]); toast(v+' を追加しました');
+  await set(ref(db,'staff'),[...state.staff,v]);
+  toast(v+' を追加しました');
+  const body=document.getElementById('a-body'); if(body) body.innerHTML=renderSettings();
 };
 window.rmStaff = n => openModal(n+' を削除しますか？', async()=>{
-  await set(ref(db,'staff'),state.staff.filter(s=>s!==n)); toast('削除しました');
+  await set(ref(db,'staff'),state.staff.filter(s=>s!==n));
+  toast('削除しました');
+  const body=document.getElementById('a-body'); if(body) body.innerHTML=renderSettings();
 });
 window.addStore = async()=>{
   const v=document.getElementById('nst')?.value.trim(); if(!v) return;
   if(state.stores.includes(v)){toast('すでに存在します');return;}
-  await set(ref(db,'stores'),[...state.stores,v]); toast(v+' を追加しました');
+  await set(ref(db,'stores'),[...state.stores,v]);
+  toast(v+' を追加しました');
+  const body=document.getElementById('a-body'); if(body) body.innerHTML=renderSettings();
 };
 window.rmStore = n => openModal(n+' を削除しますか？', async()=>{
-  await set(ref(db,'stores'),state.stores.filter(s=>s!==n)); toast('削除しました');
+  await set(ref(db,'stores'),state.stores.filter(s=>s!==n));
+  toast('削除しました');
+  const body=document.getElementById('a-body'); if(body) body.innerHTML=renderSettings();
 });
 window.chgPass = async()=>{
   const v=document.getElementById('np')?.value;
