@@ -572,37 +572,69 @@ function renderAdminSummary() {
     <div class="sec-lbl">店舗別集計</div>
     <div class="tbl-wrap" id="store-tbl">${buildStoreTbl(logs)}</div>
     <div class="sec-lbl">スタッフ別集計</div>
-    <div class="tbl-wrap" id="staff-tbl">${buildStaffTbl(logs)}</div>`;
+    <div class="tbl-wrap" id="staff-tbl">${buildStaffTblWrapper(logs)}</div>`;
 }
 window.refreshAdminSummary=()=>{
   const logs=filterLogs('am','as2',null);
   document.getElementById('ast').innerHTML=buildStats(logs);
   document.getElementById('store-tbl').innerHTML=buildStoreTbl(logs);
-  document.getElementById('staff-tbl').innerHTML=buildStaffTbl(logs);
+  document.getElementById('staff-tbl').innerHTML=buildStaffTblWrapper(logs);
 };
 function buildStats(logs) {
   const total=logs.reduce((s,l)=>s+l.count,0);
+  const totalGroups=logs.length;
   const sc=new Set(logs.map(l=>l.staff)).size;
   return `
     <div class="stat-card"><div class="stat-lbl">合計人数</div><div class="stat-val">${total}<span class="stat-unit">人</span></div></div>
-    <div class="stat-card"><div class="stat-lbl">件数</div><div class="stat-val">${logs.length}<span class="stat-unit">件</span></div></div>
+    <div class="stat-card"><div class="stat-lbl">合計組数</div><div class="stat-val">${totalGroups}<span class="stat-unit">組</span></div></div>
     <div class="stat-card"><div class="stat-lbl">活動スタッフ</div><div class="stat-val">${sc}<span class="stat-unit">名</span></div></div>`;
 }
 function buildStoreTbl(logs) {
   const total=logs.reduce((s,l)=>s+l.count,0);
-  const agg={}; state.stores.forEach(s=>agg[s]=0);
-  logs.forEach(l=>{agg[l.store]=(agg[l.store]||0)+l.count;});
-  return `<table><thead><tr><th style="width:40%">店舗</th><th style="width:30%">人数</th><th style="width:30%">割合</th></tr></thead><tbody>
-    ${Object.entries(agg).sort((a,b)=>b[1]-a[1]).map(([s,c])=>`<tr><td>${s}</td><td><strong>${c}人</strong></td><td><span class="badge-g">${total?Math.round(c/total*100):0}%</span></td></tr>`).join('')}
+  const aggPeople={}; const aggGroups={};
+  state.stores.forEach(s=>{aggPeople[s]=0; aggGroups[s]=0;});
+  logs.forEach(l=>{
+    aggPeople[l.store]=(aggPeople[l.store]||0)+l.count;
+    aggGroups[l.store]=(aggGroups[l.store]||0)+1;
+  });
+  return `<table><thead><tr><th style="width:35%">店舗</th><th style="width:22%">人数</th><th style="width:18%">組数</th><th style="width:25%">割合</th></tr></thead><tbody>
+    ${Object.entries(aggPeople).sort((a,b)=>b[1]-a[1]).map(([s,c])=>`<tr><td>${s}</td><td><strong>${c}人</strong></td><td>${aggGroups[s]}組</td><td><span class="badge-g">${total?Math.round(c/total*100):0}%</span></td></tr>`).join('')}
   </tbody></table>`;
 }
 function buildStaffTbl(logs) {
-  const agg={};
-  logs.forEach(l=>{agg[l.staff]=(agg[l.staff]||0)+l.count;});
-  const rows=Object.entries(agg).sort((a,b)=>b[1]-a[1]);
+  // スタッフ別に集計
+  const staffAgg={};
+  logs.forEach(l=>{
+    if(!staffAgg[l.staff]) staffAgg[l.staff]={total:0,groups:0,stores:{}};
+    staffAgg[l.staff].total+=l.count;
+    staffAgg[l.staff].groups+=1;
+    if(!staffAgg[l.staff].stores[l.store]) staffAgg[l.staff].stores[l.store]={people:0,groups:0};
+    staffAgg[l.staff].stores[l.store].people+=l.count;
+    staffAgg[l.staff].stores[l.store].groups+=1;
+  });
+  const rows=Object.entries(staffAgg).sort((a,b)=>b[1].total-a[1].total);
   if(!rows.length) return '<div class="empty" style="padding:1.5rem;">データがありません</div>';
-  return `<table><thead><tr><th style="width:45%">スタッフ</th><th style="width:30%">人数</th><th style="width:25%">件数</th></tr></thead><tbody>
-    ${rows.map(([n,c])=>`<tr><td>${n}</td><td><strong>${c}人</strong></td><td>${logs.filter(l=>l.staff===n).length}件</td></tr>`).join('')}
+  return rows.map(([name,d])=>{
+    const storeRows=Object.entries(d.stores).sort((a,b)=>b[1].people-a[1].people)
+      .map(([store,sd])=>`
+        <tr style="background:var(--surface2);">
+          <td style="padding-left:20px;font-size:12px;color:var(--text2);">└ ${store}</td>
+          <td style="font-size:12px;color:var(--text2);">${sd.people}人</td>
+          <td style="font-size:12px;color:var(--text2);">${sd.groups}組</td>
+        </tr>`).join('');
+    return `
+      <tr style="border-top:1px solid var(--border2);">
+        <td><strong>${name}</strong></td>
+        <td><strong>${d.total}人</strong></td>
+        <td><strong>${d.groups}組</strong></td>
+      </tr>${storeRows}`;
+  }).join('');
+}
+function buildStaffTblWrapper(logs) {
+  if(!Object.keys(logs.reduce((a,l)=>{a[l.staff]=1;return a;},{})).length)
+    return '<div class="empty" style="padding:1.5rem;">データがありません</div>';
+  return `<table><thead><tr><th style="width:45%">スタッフ</th><th style="width:27%">人数</th><th style="width:28%">組数</th></tr></thead><tbody>
+    ${buildStaffTbl(logs)}
   </tbody></table>`;
 }
 
